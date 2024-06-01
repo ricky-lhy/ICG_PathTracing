@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "three": "^0.165.0",
+    "three-gpu-pathtracer": "^0.0.22"
+  },
+  "devDependencies": {
+    "vite": "^5.2.12"
+  }
+}
