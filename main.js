@@ -12,7 +12,7 @@ import { LoaderElement } from "./LoaderElement.js";
 let loader, model;
 
 const updateModel = async () => {
-    const modelInfo = { opacityToTransmission: true, ior: 1.4, url: './models/UtahTeapot.glb' }
+    const modelInfo = { opacityToTransmission: true, ior: 1.4, url: './models/pressure_cooker.glb' }
     loader.setPercentage(0);
     if (model) {
         model.traverse((c) => {
@@ -188,6 +188,12 @@ const textures = {
         texture.repeat.set(1, 1)
         texture.colorSpace = THREE.SRGBColorSpace
     }),
+    "wood": textureLoader.load('./textures/wood.jpg', (texture) => {
+        texture.wrapS = THREE.RepeatWrapping
+        texture.wrapT = THREE.RepeatWrapping
+        texture.repeat.set(3, 3)
+        texture.colorSpace = THREE.SRGBColorSpace
+    }),
 }
 
 /* Walls */
@@ -224,7 +230,7 @@ const backWall = (_ => {
 })();
 const ceiling = (_ => {
     const geo = new THREE.PlaneGeometry(4, 4);
-    const mat = new THREE.MeshPhysicalMaterial({ shininess: 50, color: "#fff", reflectivity: 0.5 });
+    const mat = new THREE.MeshPhysicalMaterial({ color: "#fff", reflectivity: 0.5 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = Math.PI * 0.5;
     mesh.position.set(0, 3, 0);
@@ -234,7 +240,7 @@ const ceiling = (_ => {
 })();
 const floor = (_ => {
     const geo = new THREE.PlaneGeometry(4, 4);
-    const mat = new THREE.MeshPhysicalMaterial({ shininess: 50, color: "#fff", reflectivity: 0.5 });
+    const mat = new THREE.MeshPhysicalMaterial({ color: "#fff", reflectivity: 0.5 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = Math.PI * -.5;
     mesh.receiveShadow = true;
@@ -285,11 +291,25 @@ ball.position.y = 2
 ball.position.z = 0
 scene.add(ball)
 
+const table = new THREE.Mesh(
+    new THREE.BoxGeometry(1.1, 0.1, 0.7),
+    new THREE.MeshPhysicalMaterial({
+        map: textures.wood,
+        color: '#ffffff',
+        roughness: 0.8,
+        metalness: 0.2,
+        reflectivity: 0.2,
+    })
+)
+table.position.x = -1.25
+table.position.y = 0.75,
+table.position.z = 1.3
+scene.add(table)
 /* Utils */
 
 const getScaledSettings = () => {
     let tiles = 3;
-    let renderScale = Math.max(1 / window.devicePixelRatio, 2);
+    let renderScale = Math.max(1 / window.devicePixelRatio, 0.5);
     const aspectRatio = window.innerWidth / window.innerHeight;
     if (aspectRatio < 0.65) {
         tiles = 4;
