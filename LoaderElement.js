@@ -1,15 +1,12 @@
-let _styleElement;
+let _styleElement
+
 function initializeStyles() {
-
     if (_styleElement) {
-
-        return;
-
+        return
     }
 
-    _styleElement = document.createElement('style');
+    _styleElement = document.createElement('style')
     _styleElement.textContent = /* css */`
-
 		.loader-container, .description {
 			position: absolute;
 			width: 100%;
@@ -66,13 +63,10 @@ function initializeStyles() {
 		}
 	`;
     document.head.appendChild(_styleElement);
-
 }
 
 export class LoaderElement {
-
     constructor() {
-
         initializeStyles();
 
         const container = document.createElement('div');
@@ -106,58 +100,30 @@ export class LoaderElement {
         this._container = container;
 
         this.setPercentage(0);
-
     }
 
     attach(container) {
-
-        container.appendChild(this._container);
-        container.appendChild(this._description);
-
+        container.appendChild(this._container)
+        container.appendChild(this._description)
     }
 
     setPercentage(perc) {
-
-        this._loaderBar.style.width = `${perc * 100}%`;
-
-        if (perc === 0) {
-
-            this._percentage.innerText = 'Loading...';
-
-        } else {
-
-            this._percentage.innerText = `${(perc * 100).toFixed(0)}%`;
-
-        }
-
-        if (perc >= 1) {
-
-            this._container.classList.remove('loading');
-
-        } else {
-
-            this._container.classList.add('loading');
-
-        }
-
+        const classList = this._container.classList
+        this._loaderBar.style.width = `${perc * 100}%`
+        this._percentage.innerText = (perc === 0) ? 'Loading...' : `${(perc * 100).toFixed(0)}%`
+        if (perc >= 1) classList.remove('loading'); else classList.add('loading')
     }
 
     setSamples(count) {
-
-        this._samples.innerText = `${Math.floor(count)} samples`;
-
+        this._samples.innerText = `${Math.floor(count)} samples`
     }
 
     setCredits(credits) {
-
-        this._credits.innerHTML = credits;
-
+        this._credits.innerHTML = credits
     }
 
     setDescription(description) {
-
-        this._description.innerHTML = description;
-
+        this._description.innerHTML = description
     }
 
 }

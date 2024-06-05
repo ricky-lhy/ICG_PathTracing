@@ -1,162 +1,35 @@
 import * as THREE from 'three';
-import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
-import { WebGLPathTracer, GradientEquirectTexture, DenoiseMaterial } from 'three-gpu-pathtracer'
+import { WebGLPathTracer, GradientEquirectTexture } from 'three-gpu-pathtracer'
 import { RectAreaLightHelper } from 'three/examples/jsm/Addons.js';
-import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { ColladaLoader } from "three/examples/jsm/loaders/ColladaLoader.js";
-import { LDrawLoader } from "three/examples/jsm/loaders/LDrawLoader.js";
-import { LDrawUtils } from "three/examples/jsm/utils/LDrawUtils.js";
+
 import { LoaderElement } from "./LoaderElement.js";
+import { loadModel } from './ModelLoader.js'
 
-let loader, model;
+const rad = (deg) => deg * (Math.PI / 180)
 
-const updateModel = async () => {
-    const modelInfo = { opacityToTransmission: true, ior: 1.4, url: './models/pressure_cooker.glb' }
-    loader.setPercentage(0);
-    if (model) {
-        model.traverse((c) => {
-            if (c.material) {
-                const material = c.material;
-                for (const key in material)
-                    if (material[key] && material[key].isTexture)
-                        material[key].dispose();
-            }
-        })
-        scene.remove(model)
-        model = null
-    }
+// Settings
+const textureConfig = [
+    { name: "bricks", repeat: [2, 1], file: "bricks.jpg" },
+    { name: "wood", repeat: [3, 3], file: "wood.jpg" },
+    { name: "floor", repeat: [1, 1], file: "floor.jpg" },
+    { name: "mercury", repeat: [1, 1], file: "mercury-1.png" },
+    { name: "venus", repeat: [1, 1], file: "venus.png" },
+    { name: "earth", repeat: [1, 1], file: "earth.png" },
+    { name: "mars", repeat: [1, 1], file: "mars.png" },
+    { name: "jupitar", repeat: [1, 1], file: "jupitar.png" },
+    { name: "saturn", repeat: [1, 1], file: "saturn.png" },
+    { name: "saturnRing", repeat: [1, 1], file: "saturn-rings.png" },
+    { name: "uranus", repeat: [1, 1], file: "uranus.png" },
+    { name: "neptune", repeat: [1, 1], file: "neptune.png" },
 
-    try {
-        model = await loadModel(modelInfo.url, v => loader.setPercentage(0.5 * v))
-    } catch (err) {
-        loader.setCredits("Failed to load model:" + err.message)
-        loader.setPercentage(1)
-    }
+]
 
-    if (modelInfo.removeEmission) {
-        model.traverse((c) => {
-            if (c.material) {
-                c.material.emissiveMap = null
-                c.material.emissiveIntensity = 0
-            }
-        })
-    }
-
-    if (modelInfo.opacityToTransmission) {
-        model.traverse((c) => {
-            if (c.material) {
-                const material = c.material
-                if (material.opacity < 0.65 && material.opacity > 0.2) {
-                    const newMaterial = new THREE.MeshPhysicalMaterial()
-                    for (const key in material) {
-                        if (key in material) {
-                            if (material[key] === null)
-                                continue
-                            if (material[key].isTexture)
-                                newMaterial[key] = material[key]
-                            else if (material[key].copy && material[key].constructor === newMaterial[key].constructor)
-                                newMaterial[key].copy(material[key])
-                            else if (typeof material[key] === "number")
-                                newMaterial[key] = material[key]
-                        }
-                    }
-                    const hsl = {}
-                    newMaterial.opacity = 1.0
-                    newMaterial.transmission = 1.0
-                    newMaterial.ior = modelInfo.ior || 1.5
-                    newMaterial.color.getHSL(hsl)
-                    hsl.l = Math.max(hsl.l, 0.35)
-                    newMaterial.color.setHSL(hsl.h, hsl.s, hsl.l)
-                    c.material = newMaterial
-                }
-            }
-        })
-    }
-
-    model.traverse((c) => {
-        if (c.material) c.material.thickness = 1.0;
-    })
-
-    if (modelInfo.postProcess) modelInfo.postProcess(model)
-    if (modelInfo.rotation) model.rotation.set(...modelInfo.rotation)
-
-    const box = new THREE.Box3();
-    box.setFromObject(model);
-
-    const sphere = new THREE.Sphere();
-    box.getBoundingSphere(sphere);
-    model.scale.setScalar(1 / sphere.radius);
-    model.position.multiplyScalar(1 / sphere.radius);
-    box.setFromObject(model);
-
-    // Adjust position, size and rotation here
-    model.position.y = 1
-    model.scale.setScalar((1 / sphere.radius) * 0.5);
-    model.rotation.y = Math.PI / 4
-    scene.add(model);
-
-    loader.setPercentage(1);
-    loader.setCredits(modelInfo.credit || "");
-}
-
-const loadModel = async (url, onProgress) => {
-    const manager = new THREE.LoadingManager()
-
-    if (/dae$/i.test(url)) {
-        const complete = new Promise((resolve) => (manager.onLoad = resolve))
-        const res = await new ColladaLoader(manager).loadAsync(url, (progress) => {
-            if (progress.total !== 0 && progress.total >= progress.loaded)
-                onProgress(progress.loaded / progress.total)
-        })
-        await complete
-        res.scene.scale.setScalar(1)
-        res.scene.traverse((c) => {
-            const { material } = c
-            if (material && material.isMeshPhongMaterial) {
-                c.material = new MeshStandardMaterial({
-                    color: material.color,
-                    roughness: material.roughness || 0,
-                    metalness: material.metalness || 0,
-                    map: material.map || null
-                })
-            }
-        })
-        return res.scene
-    }
-
-    if (/(gltf|glb)$/i.test(url)) {
-        const complete = new Promise((resolve) => (manager.onLoad = resolve))
-        const gltf = await new GLTFLoader(manager)
-            .setMeshoptDecoder(MeshoptDecoder)
-            .loadAsync(url, (progress) => {
-                if (progress.total !== 0 && progress.total >= progress.loaded)
-                    onProgress(progress.loaded / progress.total)
-            })
-        await complete
-        return gltf.scene
-    }
-
-    if (/mpd$/i.test(url)) {
-        manager.onProgress = (url, loaded, total) => loader.setPercentage(loaded / total)
-        const complete = new Promise((resolve) => (manager.onLoad = resolve))
-        const ldrawLoader = new LDrawLoader(manager)
-        await ldrawLoader.preloadMaterials("https://raw.githubusercontent.com/gkjohnson/ldraw-parts-library/master/colors/ldcfgalt.ldr")
-        const result = await ldrawLoader
-            .setPartsLibraryPath("https://raw.githubusercontent.com/gkjohnson/ldraw-parts-library/master/complete/ldraw/")
-            .loadAsync(url)
-        await complete
-        const model = LDrawUtils.mergeObject(result)
-        model.rotation.set(Math.PI, 0, 0)
-        const toRemove = []
-        model.traverse((c) => {
-            if (c.isLineSegments) toRemove.push(c)
-            if (c.isMesh) c.material.roughness *= 0.25
-        })
-        toRemove.forEach((c) => c.parent.remove(c))
-        return model
-    }
-}
+const models = [
+    { url: './models/cooker.glb', position: [-1.35, 0.85, 1.1], rotation: [0, -45, 0], scale: 0.625 },
+    { url: './models/shield.glb', position: [0, 1.5, -2], rotation: [0, 0, 0], scale: 0.875 },
+    { url: './models/iron_man.glb', position: [1.25, 0, -1], rotation: [0, -30, 0], scale: 1.25 },
+    { url: './models/knight.glb', position: [-1.25, 1.125, -1], rotation: [0, 30, 0], scale: 1.25 },
+]
 
 // Init scene
 const scene = new THREE.Scene();
@@ -164,45 +37,34 @@ const axesHelper = new THREE.AxesHelper(200)
 scene.add(axesHelper)
 
 // Lighting 
-const rectLight = new THREE.RectAreaLight("#FFFFFF", 1, 1, 1)
+const rectLight = new THREE.RectAreaLight("#FFFFFF", 2, 1, 2)
 const rectLightHelper = new RectAreaLightHelper(rectLight)
 rectLight.castShadow = true
-rectLight.power = 20
-rectLight.position.set(0, 3, 0)
-rectLight.lookAt(0, 0, 0)
+rectLight.power = 50
+rectLight.position.set(0, 3, -1)
+rectLight.lookAt(0, 0, -1)
 rectLight.add(rectLightHelper)
 scene.add(rectLight)
 
 // Textures
 const textureLoader = new THREE.TextureLoader()
-const textures = {
-    "marble": textureLoader.load('./textures/whiteMarbleThinVein.jpg', (texture) => {
+const textures = {}
+textureConfig.forEach(({ name, repeat, file }) => {
+    textures[name] = textureLoader.load(`./textures/${file}`, (texture) => {
         texture.wrapS = THREE.RepeatWrapping
         texture.wrapT = THREE.RepeatWrapping
-        texture.repeat.set(2, 2)
+        texture.repeat.set(repeat[0], repeat[1])
         texture.colorSpace = THREE.SRGBColorSpace
-    }),
-    "world": textureLoader.load('./textures/world.jpg', (texture) => {
-        texture.wrapS = THREE.RepeatWrapping
-        texture.wrapT = THREE.RepeatWrapping
-        texture.repeat.set(1, 1)
-        texture.colorSpace = THREE.SRGBColorSpace
-    }),
-    "wood": textureLoader.load('./textures/wood.jpg', (texture) => {
-        texture.wrapS = THREE.RepeatWrapping
-        texture.wrapT = THREE.RepeatWrapping
-        texture.repeat.set(3, 3)
-        texture.colorSpace = THREE.SRGBColorSpace
-    }),
-}
+    })
+})
+
 
 /* Walls */
-
 const leftWall = (_ => {
     const geo = new THREE.PlaneGeometry(4, 3);
     const mat = new THREE.MeshPhongMaterial({ color: "#ffcc00", reflectivity: 0.25 });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.y = Math.PI * 0.5;
+    mesh.rotation.y = rad(90);
     mesh.position.set(-2, 1.5, 0);
     mesh.receiveShadow = true;
     scene.add(mesh);
@@ -210,19 +72,18 @@ const leftWall = (_ => {
 })();
 const rightWall = (_ => {
     const geo = new THREE.PlaneGeometry(4, 3);
-    const mat = new THREE.MeshPhongMaterial({ color: "#00ccff", reflectivity: 0.25 });
+    const mat = new THREE.MeshPhongMaterial({ color: "#00ccff", w: 0.25 });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.y = Math.PI * -0.5;
+    mesh.rotation.y = rad(-90);
     mesh.position.set(2, 1.5, 0);
     mesh.receiveShadow = true;
     scene.add(mesh);
     return mesh;
 })();
 const backWall = (_ => {
-    const geo = new THREE.PlaneGeometry(3, 4);
-    const mat = new THREE.MeshStandardMaterial({ map: textures.marble, metalness: 0.1, roughness: 0 });
+    const geo = new THREE.PlaneGeometry(4, 3);
+    const mat = new THREE.MeshPhysicalMaterial({ map: textures.bricks, metalness: 0, roughness: 1 });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.z = Math.PI * -0.5;
     mesh.position.set(0, 1.5, -2);
     mesh.receiveShadow = true;
     scene.add(mesh);
@@ -232,7 +93,7 @@ const ceiling = (_ => {
     const geo = new THREE.PlaneGeometry(4, 4);
     const mat = new THREE.MeshPhysicalMaterial({ color: "#fff", reflectivity: 0.5 });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = Math.PI * 0.5;
+    mesh.rotation.x = rad(90);
     mesh.position.set(0, 3, 0);
     mesh.receiveShadow = true;
     scene.add(mesh);
@@ -240,7 +101,7 @@ const ceiling = (_ => {
 })();
 const floor = (_ => {
     const geo = new THREE.PlaneGeometry(4, 4);
-    const mat = new THREE.MeshPhysicalMaterial({ color: "#fff", reflectivity: 0.5 });
+    const mat = new THREE.MeshPhysicalMaterial({ map: textures.floor, color: "#fff", reflectivity: 0.5 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = Math.PI * -.5;
     mesh.receiveShadow = true;
@@ -250,63 +111,183 @@ const floor = (_ => {
 
 /* Objects */
 
-const boxes = [];
-// for (let h = -1.75; h <= 1.75; h += 0.25)
-//     for (let i = -1.75; i <= 1.75; i += 0.25)
-//         for (let j = 0.25; j <= 1.5; j += 0.25) {
-//             boxes.push(new THREE.Mesh(
-//                 new THREE.BoxGeometry(0.75, 0.75, 0.75),
-//                 new THREE.MeshStandardMaterial({ color: '#2196f3', roughness: 0.2, metalness: 1, })
-//             ))
-//             boxes[boxes.length - 1].position.z = -1.25
-//             boxes[boxes.length - 1].position.y = 2.25
-//             boxes[boxes.length - 1].position.x = 0
-//             boxes[boxes.length - 1].rotation.z = Math.PI / 4
-//             boxes[boxes.length - 1].rotation.y = Math.PI / 4
-//         }
-boxes.forEach(box => scene.add(box))
+const solarGroup = new THREE.Group()
+const solar = {
+    earth: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.15, 64, 64),
+            new THREE.MeshStandardMaterial({
+                map: textures.earth,
+                color: '#ffffff',
+                roughness: 1,
+                metalness: 0,
+            }))
+        mesh.position.set(-0.75, 0.35, 0.65)
+        mesh.rotation.z = rad(23)
+        mesh.castShadow = true
+        return mesh
+    })(),
+    mars: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.15, 64, 64),
+            new THREE.MeshStandardMaterial({
+                map: textures.mars,
+                color: '#ffffff',
+                roughness: 1,
+                metalness: 0,
+            }))
+        mesh.position.set(-0.95, 0.25, 0.05)
+        mesh.rotation.z = rad(25)
+        mesh.castShadow = true
+        return mesh
+    })(),
+    uranus: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.2, 64, 64),
+            new THREE.MeshStandardMaterial({
+                map: textures.uranus,
+                color: '#ffffff',
+                roughness: 1,
+                metalness: 0,
+            }))
+        mesh.position.set(-0.7, 0.3, -0.7)
+        mesh.rotation.z = rad(98)
+        mesh.castShadow = true
+        return mesh
+    })(),
+    venus: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.15, 64, 64),
+            new THREE.MeshStandardMaterial({
+                map: textures.venus,
+                color: '#ffffff',
+                roughness: 1,
+                metalness: 0,
+            }))
+        mesh.position.set(0.05, 0.3, -0.95)
+        mesh.castShadow = true
+        mesh.rotation.z = rad(177)
+        return mesh
+    })(),
+    mercury: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.15, 64, 64),
+            new THREE.MeshStandardMaterial({
+                map: textures.mercury,
+                color: '#ffffff',
+                roughness: 1,
+                metalness: 0,
+            }))
+        mesh.position.set(0.75, 0.25, -0.75)
+        mesh.rotation.z = rad(0.1)
+        mesh.castShadow = true
+        return mesh
+    })(),
+    jupitar: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.25, 64, 64),
+            new THREE.MeshStandardMaterial({
+                map: textures.jupitar,
+                color: '#ffffff',
+                roughness: 1,
+                metalness: 0,
+            }))
+        mesh.position.set(1.15, 0.2, 0)
+        mesh.rotation.z = rad(3)
+        mesh.castShadow = true
+        return mesh
+    })(),
+    neptune: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.2, 64, 64),
+            new THREE.MeshStandardMaterial({
+                map: textures.neptune,
+                color: '#ffffff',
+                roughness: 1,
+                metalness: 0,
+            }))
+        mesh.position.set(0.85, 0.25, 0.8)
+        mesh.rotation.z = rad(30)
+        mesh.castShadow = true
+        return mesh
+    })(),
+    saturn: (() => {
+        const planetMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.25, 64, 64),
+            new THREE.MeshStandardMaterial({
+                map: textures.saturn,
+                color: '#ffffff',
+                roughness: 1,
+                metalness: 0,
+            }))
+        const torusMesh = new THREE.Mesh(
+            new THREE.TorusGeometry(0.425, 0.075, 4, 64),
+            new THREE.MeshStandardMaterial({
+                map: textures.saturnRing,
+                color: '#ddddcc',
+                roughness: 1,
+                metalness: 0,
+            })
+        )
+        torusMesh.rotation.set(rad(90), 0, 0)
+        torusMesh.scale.z = 0.2
+        const mesh = new THREE.Group()
+        mesh.add(planetMesh, torusMesh)
+        mesh.position.set(0.05, 0.2, 1.05)
+        mesh.rotation.z = rad(27)
+        mesh.castShadow = true
+        return mesh
+    })(),
+}
+solarGroup.add(...Object.values(solar))
+scene.add(solarGroup)
 
-const ball = new THREE.Mesh(
-    new THREE.SphereGeometry(0.25, 64, 64),
-    new THREE.MeshStandardMaterial({
-        map: textures.world,
-        color: '#ffffff',
-        roughness: 1,
-        metalness: 0,
-    })
-    // new THREE.MeshPhysicalMaterial({
-    //     color: '#ffdc00',
-    //     metalness: 0,
-    //     roughness: 0,
-    //     ior: 1.7,
-    //     thickness: 0.5,
-    //     // transparent: true,
-    //     transmission: 1,
-    //     specularIntensity: 1.0,
-    //     clearcoat: 1.0
-    // })
-)
-ball.rotation.y = Math.PI * 1.25
-ball.position.y = 2
-ball.position.z = 0
-scene.add(ball)
+const tableGroup = new THREE.Group()
+const tableDim = { x: 1.4, y: 0.85, z: 1 }
+const table = {
+    board: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(tableDim.x, 0.1, tableDim.z),
+            new THREE.MeshPhysicalMaterial({
+                map: textures.wood,
+                color: '#ffffff',
+                roughness: 0.8,
+                metalness: 0.2,
+                reflectivity: 0.5,
+            })
+        )
+        mesh.position.y = tableDim.y - 0.1
+        return mesh
+    })(),
+    leg1: new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.04, tableDim.y - 0.1, 64),
+        new THREE.MeshPhysicalMaterial({ color: '#c9c9c9', reflectivity: 1, metalness: 1, roughness: 0.25 })
+    ),
+    leg2: new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.04, tableDim.y - 0.1, 64),
+        new THREE.MeshPhysicalMaterial({ color: '#c9c9c9', reflectivity: 1, metalness: 1, roughness: 0.25 })
+    ),
+    leg3: new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.04, tableDim.y - 0.1, 64),
+        new THREE.MeshPhysicalMaterial({ color: '#c9c9c9', reflectivity: 1, metalness: 1, roughness: 0.25 })
+    ),
+    leg4: new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.04, tableDim.y - 0.1, 64),
+        new THREE.MeshPhysicalMaterial({ color: '#c9c9c9', reflectivity: 1, metalness: 1, roughness: 0.25 })
+    )
+}
 
-const table = new THREE.Mesh(
-    new THREE.BoxGeometry(1.1, 0.1, 0.7),
-    new THREE.MeshPhysicalMaterial({
-        map: textures.wood,
-        color: '#ffffff',
-        roughness: 0.8,
-        metalness: 0.2,
-        reflectivity: 0.2,
-    })
-)
-table.position.x = -1.25
-table.position.y = 0.75,
-table.position.z = 1.3
-scene.add(table)
+table.leg1.position.set(tableDim.x / 2 - 0.1, (tableDim.y - 0.1) / 2, tableDim.z / 2 - 0.1)
+table.leg2.position.set(0.1 - tableDim.x / 2, (tableDim.y - 0.1) / 2, 0.1 - tableDim.z / 2)
+table.leg3.position.set(tableDim.x / 2 - 0.1, (tableDim.y - 0.1) / 2, 0.1 - tableDim.z / 2)
+table.leg4.position.set(0.1 - tableDim.x / 2, (tableDim.y - 0.1) / 2, tableDim.z / 2 - 0.1)
+
+tableGroup.add(...Object.values(table))
+tableGroup.position.set(-1.25, 0, 1.1)
+
+scene.add(tableGroup)
+
 /* Utils */
-
 const getScaledSettings = () => {
     let tiles = 3;
     let renderScale = Math.max(1 / window.devicePixelRatio, 0.5);
@@ -326,39 +307,24 @@ texture.update();
 scene.environment = texture;
 scene.background = texture;
 
-const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 1, 500);
-camera.position.set(0, 1.5, 5);
-// camera.lookAt(0, 0, 0)
-
+// Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 document.body.appendChild(renderer.domElement);
 
-const settings = getScaledSettings();
-const pathTracer = new WebGLPathTracer(renderer);
-pathTracer.bounces = 5
-pathTracer.renderScale = settings.renderScale;
-pathTracer.tiles.setScalar(settings.tiles);
+// Camera & control
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 1, 500);
+camera.position.set(0, 1.5, 5.5)
+// camera.lookAt(0, 0, 0)
 
-// let denoiseQuad
-// pathTracer.renderToCanvasCallback = (target, renderer, quad) => {
-//     denoiseQuad.material.sigma = 2;
-//     denoiseQuad.material.threshold = 0.1;
-//     denoiseQuad.material.kSigma = 1;
-//     denoiseQuad.material.opacity = quad.material.opacity;
-//     const autoClear = renderer.autoClear;
-//     const finalQuad = denoiseQuad;
-//     renderer.autoClear = false;
-//     finalQuad.material.map = target.texture;
-//     finalQuad.render(renderer);
-//     renderer.autoClear = autoClear;
-// };
-// // denoiser
-// denoiseQuad = new FullScreenQuad(new DenoiseMaterial({
-//     map: null,
-//     blending: THREE.CustomBlending,
-//     premultipliedAlpha: renderer.getContextAttributes().premultipliedAlpha,
-// }));
+const settings = getScaledSettings()
+const pathTracer = new WebGLPathTracer(renderer)
+pathTracer.bounces = 3
+pathTracer.minSamples = 1
+pathTracer.dynamicLowRes = true
+pathTracer.lowResScale = 0.75
+pathTracer.renderScale = settings.renderScale
+pathTracer.tiles.setScalar(settings.tiles)
 
 
 const animate = () => {
@@ -367,7 +333,7 @@ const animate = () => {
 }
 
 const onResize = async () => {
-    loader = new LoaderElement();
+    const loader = new LoaderElement();
     loader.attach(document.body);
 
     const w = window.innerWidth;
@@ -379,17 +345,65 @@ const onResize = async () => {
     const aspect = w / h;
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
-    await updateModel()
+
+    for await (const model of models) {
+        scene.add(await loadModel(loader, model))
+    }
+
     pathTracer.setScene(scene, camera);
 }
 
-window.addEventListener('resize', () => onResize());
+window.addEventListener('resize', () => onResize())
 
 document.addEventListener("keyup", (event) => {
-    if (event.isComposing || event.key === ' ')
+    if (event.isComposing || event.key === ' ') {
         onResize()
-});
+        return
+    }
+    switch (event.key) {
+        case 'w':
+            camera.position.z -= 0.25
+            pathTracer.setCamera(camera)
+            break
+        case 'a':
+            camera.position.x -= 0.25
+            pathTracer.setCamera(camera)
+            break
+        case 's':
+            camera.position.z += 0.25
+            pathTracer.setCamera(camera)
+            break
+        case 'd':
+            camera.position.x += 0.25
+            pathTracer.setCamera(camera)
+            break
+        case 'q':
+            camera.position.y += 0.25
+            pathTracer.setCamera(camera)
+            break
+        case 'e':
+            camera.position.y -= 0.25
+            pathTracer.setCamera(camera)
+            break
+        case 'ArrowLeft':
+            camera.rotation.y += rad(10)
+            pathTracer.setCamera(camera)
+            break
+        case 'ArrowRight':
+            camera.rotation.y += rad(-10)
+            pathTracer.setCamera(camera)
+            break
+        case 'ArrowUp':
+            camera.rotation.x += rad(10)
+            pathTracer.setCamera(camera)
+            break
+        case 'ArrowDown':
+            camera.rotation.x += rad(-10)
+            pathTracer.setCamera(camera)
+            break
 
+    }
+})
 
 pathTracer.setScene(scene, camera);
 onResize();
