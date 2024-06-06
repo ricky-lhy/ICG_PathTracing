@@ -1,17 +1,22 @@
 import * as THREE from 'three';
-import { WebGLPathTracer, GradientEquirectTexture } from 'three-gpu-pathtracer'
-import { RectAreaLightHelper } from 'three/examples/jsm/Addons.js';
+import { WebGLPathTracer } from 'three-gpu-pathtracer'
 
 import { LoaderElement } from "./LoaderElement.js";
 import { loadModel } from './ModelLoader.js'
 
 const rad = (deg) => deg * (Math.PI / 180)
 
+const config = {
+    bounces: 5,
+    renderScale: .5,
+}
+
 // Settings
 const textureConfig = [
     { name: "bricks", repeat: [2, 1], file: "bricks.jpg" },
     { name: "wood", repeat: [3, 3], file: "wood.jpg" },
-    { name: "floor", repeat: [1, 1], file: "floor.jpg" },
+    { name: "floor", repeat: [1, 2], file: "floor.jpg" },
+    { name: "sun", repeat: [1, 1], file: "sun.jpg" },
     { name: "mercury", repeat: [1, 1], file: "mercury-1.png" },
     { name: "venus", repeat: [1, 1], file: "venus.png" },
     { name: "earth", repeat: [1, 1], file: "earth.png" },
@@ -25,26 +30,15 @@ const textureConfig = [
 ]
 
 const models = [
-    { url: './models/cooker.glb', position: [-1.35, 0.85, 1.1], rotation: [0, -45, 0], scale: 0.625 },
+    { url: './models/cooker.glb', position: [-1.1, 0.6, 1.3], rotation: [0, -45, 0], scale: 0.5 },
+    { url: './models/teapot.glb', position: [-1.35, 0.6, 2], rotation: [0, -45, 0], scale: 0.5 },
     { url: './models/shield.glb', position: [0, 1.5, -2], rotation: [0, 0, 0], scale: 0.875 },
-    { url: './models/iron_man.glb', position: [1.25, 0, -1], rotation: [0, -30, 0], scale: 1.25 },
-    { url: './models/knight.glb', position: [-1.25, 1.125, -1], rotation: [0, 30, 0], scale: 1.25 },
+    { url: './models/iron_man.glb', position: [1.25, 0, -0.5], rotation: [0, -30, 0], scale: 1.25 },
+    { url: './models/knight.glb', position: [-1.25, 1.125, -0.5], rotation: [0, 30, 0], scale: 1.25 },
 ]
 
 // Init scene
 const scene = new THREE.Scene();
-const axesHelper = new THREE.AxesHelper(200)
-scene.add(axesHelper)
-
-// Lighting 
-const rectLight = new THREE.RectAreaLight("#FFFFFF", 2, 1, 2)
-const rectLightHelper = new RectAreaLightHelper(rectLight)
-rectLight.castShadow = true
-rectLight.power = 50
-rectLight.position.set(0, 3, -1)
-rectLight.lookAt(0, 0, -1)
-rectLight.add(rectLightHelper)
-scene.add(rectLight)
 
 // Textures
 const textureLoader = new THREE.TextureLoader()
@@ -58,10 +52,57 @@ textureConfig.forEach(({ name, repeat, file }) => {
     })
 })
 
+// Lighting 
+const lightGroup = new THREE.Group()
+const light = {
+    boxZm: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(1.7, 0.125, 0.1),
+            new THREE.MeshPhysicalMaterial({ color: "#FFFFFF", reflectivity: 0.5 })
+        )
+        mesh.position.set(0, 2.9375, 0.8)
+        return mesh
+    })(),
+    boxZp: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(1.7, 0.125, 0.1),
+            new THREE.MeshPhysicalMaterial({ color: "#FFFFFF", reflectivity: 0.5 })
+        )
+        mesh.position.set(0, 2.9375, -0.8)
+        return mesh
+    })(),
+    boxXm: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(0.1, 0.125, 1.7),
+            new THREE.MeshPhysicalMaterial({ color: "#FFFFFF", reflectivity: 0.5 })
+        )
+        mesh.position.set(0.8, 2.9375, 0)
+        return mesh
+    })(),
+    boxXp: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(0.1, 0.125, 1.7),
+            new THREE.MeshPhysicalMaterial({ color: "#FFFFFF", reflectivity: 0.5 })
+        )
+        mesh.position.set(-0.8, 2.9375, 0)
+        return mesh
+    })(),
+    boxLight: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(1.5, 0.1, 1.5),
+            new THREE.MeshPhysicalMaterial({ emissiveIntensity: 10, emissive: '#FFFFFF' })
+        )
+        mesh.position.set(0, 2.9375, 0)
+        return mesh
+    })(),
+}
+lightGroup.add(...Object.values(light))
+scene.add(lightGroup)
+
 
 /* Walls */
 const leftWall = (_ => {
-    const geo = new THREE.PlaneGeometry(4, 3);
+    const geo = new THREE.PlaneGeometry(8, 3);
     const mat = new THREE.MeshPhongMaterial({ color: "#ffcc00", reflectivity: 0.25 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.y = rad(90);
@@ -71,8 +112,8 @@ const leftWall = (_ => {
     return mesh;
 })();
 const rightWall = (_ => {
-    const geo = new THREE.PlaneGeometry(4, 3);
-    const mat = new THREE.MeshPhongMaterial({ color: "#00ccff", w: 0.25 });
+    const geo = new THREE.PlaneGeometry(8, 3);
+    const mat = new THREE.MeshPhongMaterial({ color: "#00ccff", reflectivity: 0.25 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.y = rad(-90);
     mesh.position.set(2, 1.5, 0);
@@ -90,7 +131,7 @@ const backWall = (_ => {
     return mesh;
 })();
 const ceiling = (_ => {
-    const geo = new THREE.PlaneGeometry(4, 4);
+    const geo = new THREE.PlaneGeometry(4, 8);
     const mat = new THREE.MeshPhysicalMaterial({ color: "#fff", reflectivity: 0.5 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = rad(90);
@@ -100,30 +141,41 @@ const ceiling = (_ => {
     return mesh;
 })();
 const floor = (_ => {
-    const geo = new THREE.PlaneGeometry(4, 4);
+    const geo = new THREE.PlaneGeometry(4, 8);
     const mat = new THREE.MeshPhysicalMaterial({ map: textures.floor, color: "#fff", reflectivity: 0.5 });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = Math.PI * -.5;
+    mesh.rotation.x = rad(-90);
     mesh.receiveShadow = true;
     scene.add(mesh);
     return mesh;
 })();
 
-/* Objects */
-
+/* Solar system */
 const solarGroup = new THREE.Group()
 const solar = {
-    earth: (() => {
+    sun: (() => {
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.4, 64, 64),
+            new THREE.MeshPhongMaterial({
+                emissive: '#ffffff',
+                emissiveMap: textures.sun,
+                emissiveIntensity: 5,
+            }))
+        mesh.position.set(0, 0.3, 0)
+        mesh.castShadow = true
+        return mesh
+    })(),
+    venus: (() => {
         const mesh = new THREE.Mesh(
             new THREE.SphereGeometry(0.15, 64, 64),
             new THREE.MeshStandardMaterial({
-                map: textures.earth,
+                map: textures.venus,
                 color: '#ffffff',
                 roughness: 1,
                 metalness: 0,
             }))
         mesh.position.set(-0.75, 0.35, 0.65)
-        mesh.rotation.z = rad(23)
+        mesh.rotation.z = rad(177)
         mesh.castShadow = true
         return mesh
     })(),
@@ -155,18 +207,18 @@ const solar = {
         mesh.castShadow = true
         return mesh
     })(),
-    venus: (() => {
+    earth: (() => {
         const mesh = new THREE.Mesh(
             new THREE.SphereGeometry(0.15, 64, 64),
             new THREE.MeshStandardMaterial({
-                map: textures.venus,
+                map: textures.earth,
                 color: '#ffffff',
                 roughness: 1,
                 metalness: 0,
             }))
-        mesh.position.set(0.05, 0.3, -0.95)
+        mesh.position.set(0.05, 0.5, -0.95)
         mesh.castShadow = true
-        mesh.rotation.z = rad(177)
+        mesh.rotation.z = rad(23)
         return mesh
     })(),
     mercury: (() => {
@@ -192,7 +244,7 @@ const solar = {
                 roughness: 1,
                 metalness: 0,
             }))
-        mesh.position.set(1.15, 0.2, 0)
+        mesh.position.set(1.05, 0.2, 0)
         mesh.rotation.z = rad(3)
         mesh.castShadow = true
         return mesh
@@ -206,7 +258,7 @@ const solar = {
                 roughness: 1,
                 metalness: 0,
             }))
-        mesh.position.set(0.85, 0.25, 0.8)
+        mesh.position.set(0.75, 0.25, 0.8)
         mesh.rotation.z = rad(30)
         mesh.castShadow = true
         return mesh
@@ -224,6 +276,8 @@ const solar = {
             new THREE.TorusGeometry(0.425, 0.075, 4, 64),
             new THREE.MeshStandardMaterial({
                 map: textures.saturnRing,
+                transparent: true,
+                opacity: 0.9,
                 color: '#ddddcc',
                 roughness: 1,
                 metalness: 0,
@@ -234,20 +288,28 @@ const solar = {
         const mesh = new THREE.Group()
         mesh.add(planetMesh, torusMesh)
         mesh.position.set(0.05, 0.2, 1.05)
-        mesh.rotation.z = rad(27)
+        mesh.rotation.z = rad(-27)
         mesh.castShadow = true
         return mesh
     })(),
 }
 solarGroup.add(...Object.values(solar))
+solarGroup.scale.set(0.625, 0.625, 0.625)
+solarGroup.position.set(1, 2, 2.5)
+solarGroup.rotation.set(rad(30), 0, rad(15))
 scene.add(solarGroup)
 
+// Table
 const tableGroup = new THREE.Group()
-const tableDim = { x: 1.4, y: 0.85, z: 1 }
+const tableDim = { x: 1, y: 0.6, z: 2, t: 0.05 }
+const tableLegMesh = () => new THREE.Mesh(
+    new THREE.CylinderGeometry(0.03, 0.03, tableDim.y - tableDim.t, 64),
+    new THREE.MeshPhysicalMaterial({ color: '#c9c9c9', reflectivity: 1, metalness: 1, roughness: 0.25 })
+)
 const table = {
     board: (() => {
         const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(tableDim.x, 0.1, tableDim.z),
+            new THREE.BoxGeometry(tableDim.x, tableDim.t, tableDim.z),
             new THREE.MeshPhysicalMaterial({
                 map: textures.wood,
                 color: '#ffffff',
@@ -256,41 +318,38 @@ const table = {
                 reflectivity: 0.5,
             })
         )
-        mesh.position.y = tableDim.y - 0.1
+        mesh.position.y = tableDim.y - tableDim.t
         return mesh
     })(),
-    leg1: new THREE.Mesh(
-        new THREE.CylinderGeometry(0.04, 0.04, tableDim.y - 0.1, 64),
-        new THREE.MeshPhysicalMaterial({ color: '#c9c9c9', reflectivity: 1, metalness: 1, roughness: 0.25 })
-    ),
-    leg2: new THREE.Mesh(
-        new THREE.CylinderGeometry(0.04, 0.04, tableDim.y - 0.1, 64),
-        new THREE.MeshPhysicalMaterial({ color: '#c9c9c9', reflectivity: 1, metalness: 1, roughness: 0.25 })
-    ),
-    leg3: new THREE.Mesh(
-        new THREE.CylinderGeometry(0.04, 0.04, tableDim.y - 0.1, 64),
-        new THREE.MeshPhysicalMaterial({ color: '#c9c9c9', reflectivity: 1, metalness: 1, roughness: 0.25 })
-    ),
-    leg4: new THREE.Mesh(
-        new THREE.CylinderGeometry(0.04, 0.04, tableDim.y - 0.1, 64),
-        new THREE.MeshPhysicalMaterial({ color: '#c9c9c9', reflectivity: 1, metalness: 1, roughness: 0.25 })
-    )
+    leg0: (() => {
+        const mesh = tableLegMesh()
+        mesh.position.set(tableDim.x / 2 - 0.1, (tableDim.y - tableDim.t) / 2, tableDim.z / 2 - 0.1)
+        return mesh
+    })(),
+    leg1: (() => {
+        const mesh = tableLegMesh()
+        mesh.position.set(0.1 - tableDim.x / 2, (tableDim.y - tableDim.t) / 2, 0.1 - tableDim.z / 2)
+        return mesh
+    })(),
+    leg2: (() => {
+        const mesh = tableLegMesh()
+        mesh.position.set(tableDim.x / 2 - 0.1, (tableDim.y - tableDim.t) / 2, 0.1 - tableDim.z / 2)
+        return mesh
+    })(),
+    leg3: (() => {
+        const mesh = tableLegMesh()
+        mesh.position.set(0.1 - tableDim.x / 2, (tableDim.y - tableDim.t) / 2, tableDim.z / 2 - 0.1)
+        return mesh
+    })(),
 }
-
-table.leg1.position.set(tableDim.x / 2 - 0.1, (tableDim.y - 0.1) / 2, tableDim.z / 2 - 0.1)
-table.leg2.position.set(0.1 - tableDim.x / 2, (tableDim.y - 0.1) / 2, 0.1 - tableDim.z / 2)
-table.leg3.position.set(tableDim.x / 2 - 0.1, (tableDim.y - 0.1) / 2, 0.1 - tableDim.z / 2)
-table.leg4.position.set(0.1 - tableDim.x / 2, (tableDim.y - 0.1) / 2, tableDim.z / 2 - 0.1)
-
 tableGroup.add(...Object.values(table))
-tableGroup.position.set(-1.25, 0, 1.1)
-
+tableGroup.position.set(-1.25, 0, 1.5)
 scene.add(tableGroup)
 
 /* Utils */
 const getScaledSettings = () => {
     let tiles = 3;
-    let renderScale = Math.max(1 / window.devicePixelRatio, 0.5);
+    let renderScale = Math.max(1 / window.devicePixelRatio, config.renderScale);
     const aspectRatio = window.innerWidth / window.innerHeight;
     if (aspectRatio < 0.65) {
         tiles = 4;
@@ -299,13 +358,6 @@ const getScaledSettings = () => {
     return { tiles, renderScale };
 }
 
-// set the environment map
-const texture = new GradientEquirectTexture();
-texture.bottomColor.set(0xffffff);
-texture.bottomColor.set(0x666666);
-texture.update();
-scene.environment = texture;
-scene.background = texture;
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -319,7 +371,7 @@ camera.position.set(0, 1.5, 5.5)
 
 const settings = getScaledSettings()
 const pathTracer = new WebGLPathTracer(renderer)
-pathTracer.bounces = 3
+pathTracer.bounces = config.bounces
 pathTracer.minSamples = 1
 pathTracer.dynamicLowRes = true
 pathTracer.lowResScale = 0.75

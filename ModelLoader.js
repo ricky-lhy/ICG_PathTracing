@@ -23,7 +23,19 @@ const loadModel = async (loader, { url, ior, position, rotation, scale } = {}) =
     }
 
     try {
-        model = await importModel(loader, url, v => loader.setPercentage(0.5 * v))
+        if (!/(gltf|glb)$/i.test(url))
+            throw new Error("Model format not supported")
+
+        const manager = new THREE.LoadingManager()
+        const complete = new Promise((resolve) => (manager.onLoad = resolve))
+        const gltf = await new GLTFLoader(manager)
+            .setMeshoptDecoder(MeshoptDecoder)
+            .loadAsync(url, (progress) => {
+                if (progress.total !== 0 && progress.total >= progress.loaded)
+                    loader.setPercentage(progress.loaded / progress.total / 2)
+            })
+        await complete
+        model = gltf.scene
     } catch (err) {
         loader.setCredits("Failed to load model:" + err.message)
         loader.setPercentage(1)
@@ -75,64 +87,6 @@ const loadModel = async (loader, { url, ior, position, rotation, scale } = {}) =
 
     loader.setPercentage(1);
     return model
-}
-
-const importModel = async (loader, url, onProgress) => {
-    const manager = new THREE.LoadingManager()
-
-    if (/dae$/i.test(url)) {
-        const complete = new Promise((resolve) => (manager.onLoad = resolve))
-        const res = await new ColladaLoader(manager).loadAsync(url, (progress) => {
-            if (progress.total !== 0 && progress.total >= progress.loaded)
-                onProgress(progress.loaded / progress.total)
-        })
-        await complete
-        res.scene.scale.setScalar(1)
-        res.scene.traverse((c) => {
-            const { material } = c
-            if (material && material.isMeshPhongMaterial) {
-                c.material = new MeshStandardMaterial({
-                    color: material.color,
-                    roughness: material.roughness || 0,
-                    metalness: material.metalness || 0,
-                    map: material.map || null
-                })
-            }
-        })
-        return res.scene
-    }
-
-    if (/(gltf|glb)$/i.test(url)) {
-        const complete = new Promise((resolve) => (manager.onLoad = resolve))
-        const gltf = await new GLTFLoader(manager)
-            .setMeshoptDecoder(MeshoptDecoder)
-            .loadAsync(url, (progress) => {
-                if (progress.total !== 0 && progress.total >= progress.loaded)
-                    onProgress(progress.loaded / progress.total)
-            })
-        await complete
-        return gltf.scene
-    }
-
-    if (/mpd$/i.test(url)) {
-        manager.onProgress = (url, loaded, total) => loader.setPercentage(loaded / total)
-        const complete = new Promise((resolve) => (manager.onLoad = resolve))
-        const ldrawLoader = new LDrawLoader(manager)
-        await ldrawLoader.preloadMaterials("https://raw.githubusercontent.com/gkjohnson/ldraw-parts-library/master/colors/ldcfgalt.ldr")
-        const result = await ldrawLoader
-            .setPartsLibraryPath("https://raw.githubusercontent.com/gkjohnson/ldraw-parts-library/master/complete/ldraw/")
-            .loadAsync(url)
-        await complete
-        const model = LDrawUtils.mergeObject(result)
-        model.rotation.set(Math.PI, 0, 0)
-        const toRemove = []
-        model.traverse((c) => {
-            if (c.isLineSegments) toRemove.push(c)
-            if (c.isMesh) c.material.roughness *= 0.25
-        })
-        toRemove.forEach((c) => c.parent.remove(c))
-        return model
-    }
 }
 
 export { loadModel }
