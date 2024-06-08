@@ -3,12 +3,13 @@ import { WebGLPathTracer } from 'three-gpu-pathtracer'
 
 import { LoaderElement } from "./LoaderElement.js";
 import { loadModel } from './ModelLoader.js'
+import getLight from './MyLight.js'
 
 const rad = (deg) => deg * (Math.PI / 180)
 
 const config = {
-    bounces: 5,
-    renderScale: .5,
+    bounces: 20,
+    renderScale: 2,
 }
 
 // Settings
@@ -53,51 +54,18 @@ textureConfig.forEach(({ name, repeat, file }) => {
 })
 
 // Lighting 
-const lightGroup = new THREE.Group()
-const light = {
-    boxZm: (() => {
-        const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(1.7, 0.125, 0.1),
-            new THREE.MeshPhysicalMaterial({ color: "#FFFFFF", reflectivity: 0.5 })
-        )
-        mesh.position.set(0, 2.9375, 0.8)
-        return mesh
-    })(),
-    boxZp: (() => {
-        const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(1.7, 0.125, 0.1),
-            new THREE.MeshPhysicalMaterial({ color: "#FFFFFF", reflectivity: 0.5 })
-        )
-        mesh.position.set(0, 2.9375, -0.8)
-        return mesh
-    })(),
-    boxXm: (() => {
-        const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(0.1, 0.125, 1.7),
-            new THREE.MeshPhysicalMaterial({ color: "#FFFFFF", reflectivity: 0.5 })
-        )
-        mesh.position.set(0.8, 2.9375, 0)
-        return mesh
-    })(),
-    boxXp: (() => {
-        const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(0.1, 0.125, 1.7),
-            new THREE.MeshPhysicalMaterial({ color: "#FFFFFF", reflectivity: 0.5 })
-        )
-        mesh.position.set(-0.8, 2.9375, 0)
-        return mesh
-    })(),
-    boxLight: (() => {
-        const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(1.5, 0.1, 1.5),
-            new THREE.MeshPhysicalMaterial({ emissiveIntensity: 10, emissive: '#FFFFFF' })
-        )
-        mesh.position.set(0, 2.9375, 0)
-        return mesh
-    })(),
-}
-lightGroup.add(...Object.values(light))
-scene.add(lightGroup)
+const light_l1 = getLight(20, 0.25, 1.5, 0.1)
+const light_l2 = getLight(20, 0.25, 1.5, 0.1)
+const light_r1 = getLight(20, 0.25, 1.5, 0.1)
+const light_r2 = getLight(20, 0.25, 1.5, 0.1)
+light_l1.position.set(-1, 0, -0.5)
+light_l2.position.set(-1, 0, 2)
+light_r1.position.set(1, 0, -0.5)
+light_r2.position.set(1, 0, 2)
+scene.add(light_l1)
+scene.add(light_l2)
+scene.add(light_r1)
+scene.add(light_r2)
 
 
 /* Walls */
@@ -295,7 +263,7 @@ const solar = {
 }
 solarGroup.add(...Object.values(solar))
 solarGroup.scale.set(0.625, 0.625, 0.625)
-solarGroup.position.set(1, 2, 2.5)
+solarGroup.position.set(1, 2, 2.75)
 solarGroup.rotation.set(rad(30), 0, rad(15))
 scene.add(solarGroup)
 
