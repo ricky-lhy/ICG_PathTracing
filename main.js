@@ -1,17 +1,16 @@
-import { ACESFilmicToneMapping, AmbientLight, Color, DirectionalLight, PerspectiveCamera, Scene, WebGLRenderer, Vector3, Group } from 'three'
+import { ACESFilmicToneMapping, AmbientLight, Color, DirectionalLight, PerspectiveCamera, Scene, WebGLRenderer, Vector3 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-
 import { WebGLPathTracer } from 'three-gpu-pathtracer'
 
-import { Loader, loadModel } from './Loader.js'
+import { Loader, loadModel } from './loader.js'
 import { Light, Room, Solar, Table } from './geometries.js'
 
 let isTracing = false
 
 const config = {
-    bounces: 3,
+    bounces: 20,
     tiles: 3,
-    renderScale: 0.25,
+    renderScale: 2,
 }
 
 const models = [
@@ -61,7 +60,7 @@ const ambient = new AmbientLight('#ffffff', 1)
 const dirLeft = new DirectionalLight('#ffffff', 2)
 const dirRight = new DirectionalLight('#ffffff', 2)
 dirLeft.position.set(2, 2.5, 4)
-dirRight.position.set(2, 2.5, 4)
+dirRight.position.set(-2, 2.5, 4)
 scene.add(ambient, dirLeft, dirRight)
 
 const animate = () => {
@@ -86,13 +85,30 @@ const onResize = async () => {
 
 window.addEventListener('resize', () => onResize())
 
-document.getElementById("switch").addEventListener("click", () => {
+document.getElementById('switch-btn').addEventListener("click", () => {
     isTracing = !isTracing
     controls.enabled = !isTracing
     ambient.intensity = isTracing ? 0 : 1
     dirLeft.intensity = isTracing ? 0 : 2
     dirRight.intensity = isTracing ? 0 : 2
     onResize()
+})
+
+document.getElementById('control-btn').addEventListener("click", () => {
+    if (isTracing)
+        return
+    const value = (id) => parseFloat(document.getElementById(id)?.value) ?? 0
+    camera.position.set(value('cam-pos-x'), value('cam-pos-y'), value('cam-pos-z'))
+    camera.lookAt(value('cam-dir-x'), value('cam-dir-y'), value('cam-dir-z'))
+    controls.object.position.set(value('cam-pos-x'), value('cam-pos-y'), value('cam-pos-z'))
+    controls.target = new Vector3(value('cam-dir-x'), value('cam-dir-y'), value('cam-dir-z'))
+    controls.update()
+})
+
+document.addEventListener("keyup", ({ key }) => {
+    if (key !== 'Escape') return
+    document.getElementById('switch').classList.toggle('opacity-0')
+    document.getElementById('controller').classList.toggle('opacity-0')
 })
 
 onResize()
