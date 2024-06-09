@@ -79,7 +79,7 @@ class Room extends Base {
             floor: (() => {
                 const mesh = new Mesh(
                     new PlaneGeometry(width, depth),
-                    new MeshPhysicalMaterial({ map: getTexture('floor.jpg', [1, 2]), reflectivity: 0.5 })
+                    new MeshPhysicalMaterial({ map: getTexture('floor-hd.jpg', [1, 2]), reflectivity: 0.5 })
                 )
                 mesh.rotation.x = rad(-90)
                 mesh.receiveShadow = true
